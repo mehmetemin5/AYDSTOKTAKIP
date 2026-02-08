@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="tr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Stok Takip PWA</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              850: '#172033',
+              950: '#0a0f1a'
+            },
+            accent: {
+              500: '#3b82f6',
+              600: '#2563eb'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    [data-screen] { display: none; }
+    [data-screen].active { display: flex; }
+    .qr-reader { border-radius: 12px; overflow: hidden; }
+    .qr-reader video { border-radius: 12px; }
+    .quantity-btn { min-width: 48px; min-height: 48px; touch-action: manipulation; }
+    .toast-custom { font-family: inherit; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased flex flex-col">
+  <!-- Offline banner -->
+  <div id="offline-banner" class="hidden fixed top-0 left-0 right-0 z-50 bg-amber-600 text-slate-950 text-center py-2 px-4 text-sm font-medium">
+    Bağlantı yok — Çevrimdışı moddasınız
+  </div>
+
+  <main class="flex-1 flex flex-col max-w-md mx-auto w-full p-4 pt-14">
+    <!-- Screen: Login -->
+    <section id="screen-login" data-screen class="active flex-col flex-1 justify-center">
+      <div class="space-y-6">
+        <div class="text-center">
+          <h1 class="text-2xl font-bold text-slate-100 tracking-tight">Stok Takip</h1>
+          <p class="text-slate-400 mt-1 text-sm">Access Token ile giriş yapın</p>
+        </div>
+        <form id="form-login" class="space-y-4">
+          <div>
+            <label for="input-token" class="block text-sm font-medium text-slate-300 mb-2">Access Token</label>
+            <input id="input-token" type="password" required placeholder="API anahtarınızı girin"
+              class="w-full px-4 py-3 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          </div>
+          <div>
+            <label for="input-api-url" class="block text-sm font-medium text-slate-300 mb-2">API URL (Opsiyonel)</label>
+            <input id="input-api-url" type="url" placeholder="https://script.google.com/.../exec"
+              class="w-full px-4 py-3 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          </div>
+          <button type="submit" class="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors">
+            Giriş Yap
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Screen: QR Scanner -->
+    <section id="screen-scanner" data-screen class="flex-col flex-1">
+      <div class="flex-1 flex flex-col">
+        <h2 class="text-lg font-semibold text-slate-200 mb-3">QR Kod Tara</h2>
+        <div id="qr-reader" class="qr-reader flex-1 min-h-[240px] bg-slate-800 rounded-xl overflow-hidden"></div>
+        <p class="text-slate-500 text-sm mt-3 text-center">Ürün QR kodunu kameraya tutun</p>
+        <button id="btn-logout" class="mt-6 py-2 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+          Çıkış Yap
+        </button>
+      </div>
+    </section>
+
+    <!-- Screen: İşlem -->
+    <section id="screen-operation" data-screen class="flex-col flex-1">
+      <div class="space-y-6">
+        <button id="btn-back-scan" class="text-blue-500 hover:text-blue-400 text-sm flex items-center gap-1">
+          ← Tekrar Tara
+        </button>
+        <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700">
+          <p class="text-slate-400 text-sm">Ürün ID</p>
+          <p id="display-item-id" class="text-xl font-bold text-slate-100 mt-1"></p>
+        </div>
+        <div>
+          <p class="text-slate-400 text-sm mb-2">Miktar</p>
+          <div class="flex items-center justify-center gap-4">
+            <button id="btn-qty-minus" type="button" class="quantity-btn rounded-full bg-slate-700 hover:bg-slate-600 text-slate-100 text-xl font-bold transition-colors">
+              −
+            </button>
+            <span id="display-quantity" class="text-3xl font-bold text-slate-100 w-16 text-center">1</span>
+            <button id="btn-qty-plus" type="button" class="quantity-btn rounded-full bg-slate-700 hover:bg-slate-600 text-slate-100 text-xl font-bold transition-colors">
+              +
+            </button>
+          </div>
+        </div>
+        <div class="flex gap-3">
+          <button id="btn-action-add" class="flex-1 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-colors">
+            Ekle
+          </button>
+          <button id="btn-action-remove" class="flex-1 py-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium transition-colors">
+            Çıkar
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // === Config ===
+    const STORAGE_TOKEN = 'stok_access_token';
+    const STORAGE_API_URL = 'stok_api_url';
+    const DEFAULT_API_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+
+    // === State ===
+    let currentQuantity = 1;
+    let currentItemId = null;
+    let html5QrCode = null;
+
+    // === DOM ===
+    const screenLogin = document.getElementById('screen-login');
+    const screenScanner = document.getElementById('screen-scanner');
+    const screenOperation = document.getElementById('screen-operation');
+    const formLogin = document.getElementById('form-login');
+    const inputToken = document.getElementById('input-token');
+    const inputApiUrl = document.getElementById('input-api-url');
+    const qrReader = document.getElementById('qr-reader');
+    const displayItemId = document.getElementById('display-item-id');
+    const displayQuantity = document.getElementById('display-quantity');
+    const btnLogout = document.getElementById('btn-logout');
+    const btnBackScan = document.getElementById('btn-back-scan');
+    const btnQtyMinus = document.getElementById('btn-qty-minus');
+    const btnQtyPlus = document.getElementById('btn-qty-plus');
+    const btnActionAdd = document.getElementById('btn-action-add');
+    const btnActionRemove = document.getElementById('btn-action-remove');
+    const offlineBanner = document.getElementById('offline-banner');
+
+    // === Screens ===
+    function showScreen(screenEl) {
+      document.querySelectorAll('[data-screen]').forEach(s => s.classList.remove('active'));
+      screenEl.classList.add('active');
+    }
+
+    function getApiUrl() {
+      return localStorage.getItem(STORAGE_API_URL) || DEFAULT_API_URL;
+    }
+
+    function getToken() {
+      return localStorage.getItem(STORAGE_TOKEN);
+    }
+
+    // === Auth check ===
+    function checkAuth() {
+      if (getToken()) {
+        inputToken.value = getToken();
+        inputApiUrl.value = getApiUrl();
+        showScreen(screenScanner);
+        startScanner();
+      } else {
+        showScreen(screenLogin);
+      }
+    }
+
+    // === Login ===
+    formLogin.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const token = inputToken.value.trim();
+      const apiUrl = inputApiUrl.value.trim();
+      if (!token) return;
+      localStorage.setItem(STORAGE_TOKEN, token);
+      if (apiUrl) localStorage.setItem(STORAGE_API_URL, apiUrl);
+      else localStorage.removeItem(STORAGE_API_URL);
+      showScreen(screenScanner);
+      startScanner();
+    });
+
+    // === Logout ===
+    btnLogout.addEventListener('click', () => {
+      stopScanner();
+      localStorage.removeItem(STORAGE_TOKEN);
+      showScreen(screenLogin);
+    });
+
+    // === QR Scanner ===
+    function startScanner() {
+      if (html5QrCode && html5QrCode.isScanning) return;
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      html5QrCode = new Html5Qrcode('qr-reader');
+      html5QrCode.start({ facingMode: 'environment' }, config, onQrSuccess, onQrError).catch(() => {
+        Swal.fire({ icon: 'error', title: 'Kamera açılamadı', text: 'Kamera iznini kontrol edin.', background: '#1e293b', color: '#f1f5f9' });
+      });
+    }
+
+    function stopScanner() {
+      if (html5QrCode) {
+        html5QrCode.stop().catch(() => {}).finally(() => {
+          html5QrCode.clear();
+          html5QrCode = null;
+        });
+      }
+    }
+
+    function onQrSuccess(decodedText) {
+      stopScanner();
+      currentItemId = decodedText.trim();
+      currentQuantity = 1;
+      displayItemId.textContent = currentItemId;
+      displayQuantity.textContent = currentQuantity;
+      showScreen(screenOperation);
+    }
+
+    function onQrError() {}
+
+    // === Back to scan ===
+    btnBackScan.addEventListener('click', () => {
+      currentItemId = null;
+      showScreen(screenScanner);
+      startScanner();
+    });
+
+    // === Quantity ===
+    btnQtyMinus.addEventListener('click', () => {
+      if (currentQuantity > 1) {
+        currentQuantity--;
+        displayQuantity.textContent = currentQuantity;
+      }
+    });
+
+    btnQtyPlus.addEventListener('click', () => {
+      currentQuantity++;
+      displayQuantity.textContent = currentQuantity;
+    });
+
+    // === API request ===
+    async function sendAction(action) {
+      const token = getToken();
+      const apiUrl = getApiUrl();
+      if (!token || !apiUrl || !currentItemId) {
+        Swal.fire({ icon: 'error', title: 'Hata', text: 'Token veya API URL eksik.', background: '#1e293b', color: '#f1f5f9' });
+        return;
+      }
+
+      const turkishAction = action === 'add' ? 'artır' : 'azalt';
+      const payload = {
+        apiKey: token,
+        itemId: String(currentItemId),
+        action: turkishAction,
+        quantity: currentQuantity
+      };
+
+      btnActionAdd.disabled = true;
+      btnActionRemove.disabled = true;
+      Swal.fire({
+        title: 'Yükleniyor...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+        background: '#1e293b',
+        color: '#f1f5f9'
+      });
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (data.success) {
+          Swal.fire({ icon: 'success', title: 'Başarılı', text: data.message || 'İşlem tamamlandı.', background: '#1e293b', color: '#f1f5f9', timer: 2000, showConfirmButton: false });
+        } else {
+          Swal.fire({ icon: 'error', title: 'Hata', text: data.error || 'İşlem başarısız.', background: '#1e293b', color: '#f1f5f9' });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Bağlantı hatası', text: err.message || 'Sunucuya ulaşılamadı. CORS veya ağ sorununu kontrol edin.', background: '#1e293b', color: '#f1f5f9' });
+      } finally {
+        btnActionAdd.disabled = false;
+        btnActionRemove.disabled = false;
+      }
+    }
+
+    btnActionAdd.addEventListener('click', () => sendAction('add'));
+    btnActionRemove.addEventListener('click', () => sendAction('remove'));
+
+    // === Offline detection ===
+    function updateOnlineStatus() {
+      offlineBanner.classList.toggle('hidden', navigator.onLine);
+    }
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
+
+    // === Service Worker ===
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {});
+    }
+
+    // === Init ===
+    checkAuth();
+  </script>
+</body>
+</html>

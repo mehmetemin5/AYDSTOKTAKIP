@@ -1,0 +1,19 @@
+{
+  "name": "Stok Takip",
+  "short_name": "Stok",
+  "description": "Mobil stok takip PWA uygulaması",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0a0f1a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
