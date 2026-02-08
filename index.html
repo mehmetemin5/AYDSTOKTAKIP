@@ -115,6 +115,11 @@
             Çıkar
           </button>
         </div>
+        <div id="admin-add-section" class="hidden pt-4 border-t border-slate-700">
+          <button id="btn-new-material" type="button" class="w-full py-2 text-amber-400 hover:text-amber-300 text-sm">
+            ➕ Yeni malzeme olarak listeye ekle
+          </button>
+        </div>
       </div>
     </section>
   </main>
@@ -123,6 +128,7 @@
     // === Config ===
     const STORAGE_TOKEN = 'stok_access_token';
     const STORAGE_USERNAME = 'stok_username';
+    const STORAGE_IS_ADMIN = 'stok_is_admin';
     const API_URL = 'https://script.google.com/macros/s/AKfycbyQ5LWPaLFWJjOD9gpzlv6JQDvTu4VFkmYbanPTp2bNof2Kg_-EtZLPLpIrE8EonQiarw/exec';
 
     // === State ===
@@ -146,6 +152,8 @@
     const btnQtyPlus = document.getElementById('btn-qty-plus');
     const btnActionAdd = document.getElementById('btn-action-add');
     const btnActionRemove = document.getElementById('btn-action-remove');
+    const adminAddSection = document.getElementById('admin-add-section');
+    const btnNewMaterial = document.getElementById('btn-new-material');
     const offlineBanner = document.getElementById('offline-banner');
 
     // === Screens ===
@@ -199,6 +207,7 @@
         if (data.success && data.apiKey) {
           localStorage.setItem(STORAGE_TOKEN, data.apiKey);
           localStorage.setItem(STORAGE_USERNAME, username);
+          localStorage.setItem(STORAGE_IS_ADMIN, data.admin ? '1' : '0');
           Swal.fire({ icon: 'success', title: 'Giriş başarılı', timer: 1000, showConfirmButton: false, background: '#1e293b', color: '#f1f5f9' });
           showScreen(screenScanner);
           startScanner();
@@ -215,6 +224,7 @@
       stopScanner();
       localStorage.removeItem(STORAGE_TOKEN);
       localStorage.removeItem(STORAGE_USERNAME);
+      localStorage.removeItem(STORAGE_IS_ADMIN);
       inputUsername.value = '';
       inputPassword.value = '';
       showScreen(screenLogin);
@@ -245,6 +255,8 @@
       currentQuantity = 1;
       displayItemId.textContent = currentItemId;
       displayQuantity.textContent = currentQuantity;
+      const isAdmin = localStorage.getItem(STORAGE_IS_ADMIN) === '1';
+      adminAddSection.classList.toggle('hidden', !isAdmin);
       showScreen(screenOperation);
     }
 
@@ -323,6 +335,71 @@
 
     btnActionAdd.addEventListener('click', () => sendAction('add'));
     btnActionRemove.addEventListener('click', () => sendAction('remove'));
+
+    // Yeni malzeme ekle (admin)
+    btnNewMaterial.addEventListener('click', async () => {
+      const token = getToken();
+      const apiUrl = getApiUrl();
+      const kullanici = localStorage.getItem(STORAGE_USERNAME) || 'PWA';
+      if (!token || !currentItemId) return;
+
+      const { value: formValues } = await Swal.fire({
+        title: 'Yeni Malzeme Ekle',
+        html: `
+          <p class="text-slate-300 text-sm mb-2">Ürün ID: <strong>${currentItemId}</strong></p>
+          <input id="swal-malzeme-adi" class="swal2-input w-full mb-2" placeholder="Malzeme Adı" autocomplete="off">
+          <input id="swal-miktar" class="swal2-input w-full" type="number" min="0" value="0" placeholder="Başlangıç Miktarı">
+        `,
+        background: '#1e293b',
+        color: '#f1f5f9',
+        showCancelButton: true,
+        confirmButtonText: 'Ekle',
+        cancelButtonText: 'İptal',
+        preConfirm: () => {
+          const malzemeAdi = document.getElementById('swal-malzeme-adi').value.trim();
+          const miktar = parseInt(document.getElementById('swal-miktar').value, 10) || 0;
+          if (!malzemeAdi) {
+            Swal.showValidationMessage('Malzeme adı zorunludur.');
+            return false;
+          }
+          return { malzemeAdi, miktar };
+        }
+      });
+
+      if (!formValues) return;
+
+      Swal.fire({
+        title: 'Ekleniyor...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+        background: '#1e293b',
+        color: '#f1f5f9'
+      });
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'malzeme_ekle',
+            apiKey: token,
+            itemId: currentItemId,
+            malzemeAdi: formValues.malzemeAdi,
+            miktar: formValues.miktar,
+            kullanici: kullanici
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (data.success) {
+          Swal.fire({ icon: 'success', title: 'Eklendi', text: data.message, background: '#1e293b', color: '#f1f5f9', timer: 2000, showConfirmButton: false });
+        } else {
+          Swal.fire({ icon: 'error', title: 'Hata', text: data.error || 'Eklenemedi.', background: '#1e293b', color: '#f1f5f9' });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Bağlantı hatası', text: err.message, background: '#1e293b', color: '#f1f5f9' });
+      }
+    });
 
     // === Offline detection ===
     function updateOnlineStatus() {
