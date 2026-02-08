@@ -33,8 +33,23 @@
   <style>
     [data-screen] { display: none; }
     [data-screen].active { display: flex; }
-    .qr-reader { border-radius: 12px; overflow: hidden; }
-    .qr-reader video { border-radius: 12px; }
+    .qr-reader { 
+      border-radius: 12px; 
+      overflow: hidden; 
+      aspect-ratio: 1; 
+      width: 100%; 
+      max-width: 320px; 
+      margin: 0 auto;
+      background: #1e293b;
+    }
+    .qr-reader video,
+    .qr-reader img { 
+      object-fit: cover; 
+      width: 100%; 
+      height: 100%;
+    }
+    #qr-reader__scan_region,
+    #qr-reader__dashboard { width: 100% !important; }
     .quantity-btn { min-width: 48px; min-height: 48px; touch-action: manipulation; }
     .toast-custom { font-family: inherit; }
   </style>
@@ -77,7 +92,7 @@
     <section id="screen-scanner" data-screen class="flex-col flex-1">
       <div class="flex-1 flex flex-col">
         <h2 class="text-lg font-semibold text-slate-200 mb-3">QR Kod Tara</h2>
-        <div id="qr-reader" class="qr-reader flex-1 min-h-[240px] bg-slate-800 rounded-xl overflow-hidden"></div>
+        <div id="qr-reader" class="qr-reader w-full bg-slate-800 rounded-xl overflow-hidden"></div>
         <p class="text-slate-500 text-sm mt-3 text-center">Ürün QR kodunu kameraya tutun</p>
         <button id="btn-logout" class="mt-6 py-2 text-slate-400 hover:text-slate-200 text-sm transition-colors">
           Çıkış Yap
@@ -233,7 +248,14 @@
     // === QR Scanner ===
     function startScanner() {
       if (html5QrCode && html5QrCode.isScanning) return;
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      const qrboxFunction = (w, h) => {
+        const size = Math.min(w, h, 280);
+        return { width: size, height: size };
+      };
+      const config = { 
+        fps: 15, 
+        qrbox: qrboxFunction
+      };
       html5QrCode = new Html5Qrcode('qr-reader');
       html5QrCode.start({ facingMode: 'environment' }, config, onQrSuccess, onQrError).catch(() => {
         Swal.fire({ icon: 'error', title: 'Kamera açılamadı', text: 'Kamera iznini kontrol edin.', background: '#1e293b', color: '#f1f5f9' });
