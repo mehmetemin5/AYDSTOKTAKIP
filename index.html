@@ -51,20 +51,27 @@
       <div class="space-y-6">
         <div class="text-center">
           <h1 class="text-2xl font-bold text-slate-100 tracking-tight">Stok Takip</h1>
-          <p class="text-slate-400 mt-1 text-sm">Access Token ile giriş yapın</p>
+          <p class="text-slate-400 mt-1 text-sm">Kullanıcı adı ve şifre ile giriş yapın</p>
         </div>
         <form id="form-login" class="space-y-4">
           <div>
-            <label for="input-token" class="block text-sm font-medium text-slate-300 mb-2">Access Token</label>
-            <input id="input-token" type="password" required placeholder="API anahtarınızı girin"
+            <label for="input-api-url" class="block text-sm font-medium text-slate-300 mb-2">Sunucu Adresi</label>
+            <input id="input-api-url" type="url" required placeholder="https://script.google.com/.../exec"
               class="w-full px-4 py-3 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
           </div>
           <div>
-            <label for="input-api-url" class="block text-sm font-medium text-slate-300 mb-2">API URL (Opsiyonel)</label>
-            <input id="input-api-url" type="url" placeholder="https://script.google.com/.../exec"
+            <label for="input-username" class="block text-sm font-medium text-slate-300 mb-2">Kullanıcı Adı</label>
+            <input id="input-username" type="text" required placeholder="örn: ali" autocomplete="username"
               class="w-full px-4 py-3 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
           </div>
-          <button type="submit" class="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors">
+          <div>
+            <label for="input-password" class="block text-sm font-medium text-slate-300 mb-2">Şifre</label>
+            <input id="input-password" type="password" required placeholder="örn: 1234" autocomplete="current-password"
+              inputmode="numeric" maxlength="8"
+              class="w-full px-4 py-3 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <p class="text-slate-500 text-xs mt-1">Kısa PIN kullanabilirsiniz (rakam klavyesi açılır)</p>
+          </div>
+          <button type="submit" class="w-full py-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors text-lg">
             Giriş Yap
           </button>
         </form>
@@ -121,6 +128,7 @@
     // === Config ===
     const STORAGE_TOKEN = 'stok_access_token';
     const STORAGE_API_URL = 'stok_api_url';
+    const STORAGE_USERNAME = 'stok_username';
     const DEFAULT_API_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
 
     // === State ===
@@ -133,7 +141,8 @@
     const screenScanner = document.getElementById('screen-scanner');
     const screenOperation = document.getElementById('screen-operation');
     const formLogin = document.getElementById('form-login');
-    const inputToken = document.getElementById('input-token');
+    const inputUsername = document.getElementById('input-username');
+    const inputPassword = document.getElementById('input-password');
     const inputApiUrl = document.getElementById('input-api-url');
     const qrReader = document.getElementById('qr-reader');
     const displayItemId = document.getElementById('display-item-id');
@@ -162,33 +171,62 @@
 
     // === Auth check ===
     function checkAuth() {
-      if (getToken()) {
-        inputToken.value = getToken();
+      if (getToken() && getApiUrl()) {
         inputApiUrl.value = getApiUrl();
         showScreen(screenScanner);
         startScanner();
       } else {
+        inputApiUrl.value = getApiUrl();
         showScreen(screenLogin);
       }
     }
 
     // === Login ===
-    formLogin.addEventListener('submit', (e) => {
+    formLogin.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const token = inputToken.value.trim();
       const apiUrl = inputApiUrl.value.trim();
-      if (!token) return;
-      localStorage.setItem(STORAGE_TOKEN, token);
-      if (apiUrl) localStorage.setItem(STORAGE_API_URL, apiUrl);
-      else localStorage.removeItem(STORAGE_API_URL);
-      showScreen(screenScanner);
-      startScanner();
+      const username = inputUsername.value.trim();
+      const password = inputPassword.value.trim();
+      if (!apiUrl || !username || !password) return;
+
+      Swal.fire({
+        title: 'Giriş yapılıyor...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+        background: '#1e293b',
+        color: '#f1f5f9'
+      });
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'giris', kullanici_adi: username, sifre: password })
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (data.success && data.apiKey) {
+          localStorage.setItem(STORAGE_TOKEN, data.apiKey);
+          localStorage.setItem(STORAGE_API_URL, apiUrl);
+          localStorage.setItem(STORAGE_USERNAME, username);
+          Swal.fire({ icon: 'success', title: 'Giriş başarılı', timer: 1000, showConfirmButton: false, background: '#1e293b', color: '#f1f5f9' });
+          showScreen(screenScanner);
+          startScanner();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Giriş başarısız', text: data.error || 'Kullanıcı adı veya şifre hatalı.', background: '#1e293b', color: '#f1f5f9' });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Bağlantı hatası', text: err.message || 'Sunucuya ulaşılamadı.', background: '#1e293b', color: '#f1f5f9' });
+      }
     });
 
     // === Logout ===
     btnLogout.addEventListener('click', () => {
       stopScanner();
       localStorage.removeItem(STORAGE_TOKEN);
+      localStorage.removeItem(STORAGE_USERNAME);
+      inputUsername.value = '';
+      inputPassword.value = '';
       showScreen(screenLogin);
     });
 
@@ -252,11 +290,13 @@
       }
 
       const turkishAction = action === 'add' ? 'artır' : 'azalt';
+      const kullanici = localStorage.getItem(STORAGE_USERNAME) || 'PWA';
       const payload = {
         apiKey: token,
         itemId: String(currentItemId),
         action: turkishAction,
-        quantity: currentQuantity
+        quantity: currentQuantity,
+        kullanici: kullanici
       };
 
       btnActionAdd.disabled = true;
